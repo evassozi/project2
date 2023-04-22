@@ -118,16 +118,8 @@ df2 <- df2 %>% select(-c("Battery.Life..days.","Price..USD."))
 -columns need to be in right format, that is, numerical and factor/categorical
 ```{r}
 #categorical columns:
-df2$Brand <- as.factor(df2$Brand)
-df2$Model <- as.factor(df2$Model)
-df2$Operating.System <- as.factor(df2$Operating.System)
-df2$Connectivity <- as.factor(df2$Connectivity)
-df2$Display.Type <- as.factor(df2$Display.Type)
-df2$Resolution <- as.factor(df2$Resolution)
-df2$Heart.Rate.Monitor <- as.factor(df2$Heart.Rate.Monitor)
-df2$GPS <- as.factor(df2$GPS)
-df2$NFC <- as.factor(df2$NFC)
-df2$battery_range_days <- as.factor(df2$battery_range_days)
+df2 <- df2 %>%
+  mutate_if(is.character, as.factor)
 ```
 
 ```{r}
