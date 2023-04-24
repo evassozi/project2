@@ -17,7 +17,7 @@ library(tidyverse)
 library(readxl)
 library(readr)
 library(esquisse)
-
+library(caret)
 
 ```
 
@@ -228,6 +228,9 @@ battrangegg
 #simple statistics for all variables:
 summary(df2)
 ```
+# **Price prediction**
+
+## **Mulitiple linear regression model:**
 
 -We see that the heart rate monitor column has only one variable, "Yes", so this feature can be excluded for the price prediction steps.
 ```{r}
@@ -237,12 +240,94 @@ dim(df3)
 str(df3)
 ```
 
-# Price prediction
+-Investigate multicollinearity among the different 12 features/predictor variables (minus the CleanPrice variable which is the target variable):
 
-## Regression model:
+* Multicollinearity:  
+A pairwise scatter plot is plotted to identify any multicollinearity in the data. This is an important step because the regression analysis process assumes that the predictor variables are independent of each other. The pairwise plot enables us to observe any pair of predictor variables that might be highly correlated, and require further investigation to decide which variable should be included/elminated from the analysis.  
+
+```{r}
+#Standardization of quantitative variables, excluding the factor variables:
+df3_st <- df3 %>%
+  mutate_at(c("Display.Size..inches.","Water.Resistance..meters."),~(scale(.) %>%
+                          as.vector))
+```
+
+```{r}
+pairs(df3_st)
+```
+
+```{r}
+#to view correlation coefficients:
+numeric_df3_st <- df3_st %>% select(Display.Size..inches., Water.Resistance..meters., cleanPrice_usd)
+cor(numeric_df3_st) # there is no high collinearity between the numeric variables
+```
+
+There is no mulitcollinearity between the numeric variables, so we can proceed with regression analysis:
 
 
+```{r}
+#splitting dataset into train and testing sets
+set.seed(1)
+index <- createDataPartition(df3_st$Operating.System, times=1, p=0.7, list=F)
+train <- df3_st[index,]
+test <- df3_st[-index,]
+```
+
+-The categorical variables have many levels compared to the size of the dataset, so we explore building a model without use of training and testing sets.
+```{r}
+lm_1 <- lm(cleanPrice_usd ~., data = df3_st)
+summary(lm_1) #multiple r squared: 0.9914, adjusted R-squared: 0.9807
+```
+
+-Testing lm_1 using entire data set:
+```{r}
+lm_1.pred <- predict(lm_1, newdata = df3_st)
+
+#calculating mse for test set:
+mean((lm_1.pred-(df3_st$cleanPrice_usd))^2)
+```
 
 
+## Lasso regularisation model: 
 
+The Lasso method employs an inbuilt constraint instead of calculating penalties (for example cp and bic) separately.
+A  model is fitted, with 100 lambda values ranging from 10^10 to 10^-2. The goal is to select the lambda using cross validation, as a way to minimize the test error. The mean square error is calculated from predicted values using the selected lambda.
+
+```{r}
+x<- model.matrix(cleanPrice_usd~.,df3_st)[,-12] #creates matrix of predictor variables for all observations
+y<- df3_st$cleanPrice_usd #column vector of response variables
+```
+
+```{r}
+library(glmnet)
+grid <- 10^seq(10,-2, length = 100)
+lassomodel <- glmnet(x, y, alpha=1, lambda=grid) #alpha = 1 is for lasso
+plot(lassomodel)
+```
+
+The figure below illustrates the variation of the mean squared error (as calculated from the train data) with log(lambda). We choose our best lambda as the lambda associated with the minimum mean square error in the train set. This lambda is then used to predict response variables with the test set data.
+
+```{r}
+set.seed(1)
+crossvalid.out <- cv.glmnet(x, y, alpha=1)
+plot(crossvalid.out)
+bestlambda <- crossvalid.out$lambda.min #selecting the best lambda, that is at minimum error, 1.9358
+#calculating predicted values using the data:
+lassopred <- predict(lassomodel, s=bestlambda, newx = x)
+```
+
+
+```{r}
+out <- glmnet(x,y,alpha =1,lambda = grid)
+lasso.coef <- predict(out, type = "coefficients", s=bestlambda)[1:141,]
+lasso.coef
+lasso.coef[lasso.coef!=0]
+```
+
+```{r}
+#calculating mean square error from lasso regularisation:
+mean((lassopred-y)^2)
+```
+
+- The mulitple linear regression model without regularisation gave a lower mse.
 
